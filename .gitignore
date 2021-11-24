@@ -1,0 +1,4 @@
+.self_storage_env
+.env
+__pycache__
+db.sqlite3
