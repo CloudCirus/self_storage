@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'tg_bot',
+    'phonenumber_field',
 ]
 
 MIDDLEWARE = [
