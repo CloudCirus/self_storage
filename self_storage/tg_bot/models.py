@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.deletion import CASCADE
 
 from phonenumber_field.modelfields import PhoneNumberField
 
@@ -16,14 +17,14 @@ class Customer(models.Model):
     )
     first_name = models.CharField(
         'Имя',
-        max_length=256, 
-        blank=True, 
+        max_length=256,
+        blank=True,
         default=''
     )
     last_name = models.CharField(
         'Фамилия',
-        max_length=256, 
-        blank=True, 
+        max_length=256,
+        blank=True,
         default=''
     )
     passport_series = models.PositiveIntegerField(
@@ -31,13 +32,12 @@ class Customer(models.Model):
         max_length=4,
     )
     passport_number = models.PositiveIntegerField(
-        'Серия паспорта', 
+        'Серия паспорта',
         max_length=6,
     )
     phone_number = PhoneNumberField()
 
     GDPR_status = models.BooleanField(null=True, default=False)
-    
 
     def __str__(self):
         return f'{self.first_name} {self.last_name} ({self.external_id})'
@@ -45,3 +45,58 @@ class Customer(models.Model):
     class Meta:
         verbose_name = 'Покупатель'
         verbose_name_plural = 'Покупатели'
+
+
+class Storages(models.Model):
+    title = models.CharField(
+        'короткое название',
+        max_length=50,
+    )
+    city = models.CharField(
+        'Город',
+        max_length=50,
+    )
+    address = models.CharField(
+        'Адрес',
+        max_length=256,
+    )
+    space = models.PositiveIntegerField('Складская площадь')
+    free_space = models.PositiveIntegerField('Свободно м2')
+    occupied_space = models.PositiveIntegerField('Занято м2')
+
+    def __str__(self):
+        return f'{self.address} {self.free_space}/{self.occupied_space} м2'
+
+    class Meta:
+        verbose_name = 'Склад'
+        verbose_name_plural = 'Склады'
+
+
+class Order(models.Model):
+    order_number = models.PositiveIntegerField(
+        'Номер заказа',
+        null=True,
+        default=None,
+        unique=True,
+    )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=CASCADE
+    )
+    storage = models.ForeignKey(
+        Storages,
+        on_delete=CASCADE,
+    )
+    space_ordered = models.PositiveIntegerField('Арендованно м2')
+    order_price = models.PositiveIntegerField(
+        verbose_name='Цена заказа',
+    )
+    start_at = models.DateTimeField('Начало аренды')
+    finished_at = models.DateTimeField('Конец аренды')
+
+    def __str__(self):
+        return f'{self.order_number} / {self.storage.title} / {self.finished_at}'
+
+    class Meta:
+        verbose_name = 'Заказ'
+        verbose_name_plural = 'Заказы'
