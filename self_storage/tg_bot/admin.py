@@ -1,3 +1,8 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import *
+
+admin.site.register(Customer)
+admin.site.register(Storage)
+admin.site.register(Storage_item)
+admin.site.register(Order)
