@@ -31,11 +31,9 @@ class Customer(models.Model):
     )
     passport_series = models.PositiveIntegerField(
         verbose_name='Серия паспорта',
-        max_length=4,
     )
     passport_number = models.PositiveIntegerField(
         verbose_name='Номер паспорта',
-        max_length=6,
     )
     phone_number = PhoneNumberField(
         verbose_name='Номер телефона',
@@ -103,30 +101,30 @@ class Storage_item(models.Model):
         verbose_name_plural = 'Складские единицы'
 
 
-class Ordered_space(models.Model):
-    customer = models.ForeignKey(
-        Customer,
-        verbose_name='Клиент',
-        on_delete=CASCADE,
-    )
-    item = models.ForeignKey(
-        Storage_item,
-        verbose_name='Складская единица',
-        on_delete=CASCADE,
-    )
-    amount = models.PositiveIntegerField(
-        verbose_name='Количество',
-        default=1,
-    )
-    price = models.PositiveIntegerField(
-        verbose_name='Цена',
-    )
+# class Ordered_space(models.Model):
+#     customer = models.ForeignKey(
+#         Customer,
+#         verbose_name='Клиент',
+#         on_delete=CASCADE,
+#     )
+#     item = models.ForeignKey(
+#         Storage_item,
+#         verbose_name='Складская единица',
+#         on_delete=CASCADE,
+#     )
+#     amount = models.PositiveIntegerField(
+#         verbose_name='Количество',
+#         default=1,
+#     )
+#     price = models.PositiveIntegerField(
+#         verbose_name='Цена',
+#     )
 
-    def __str__(self):
-        return f'{self.customer}'
+#     def __str__(self):
+#         return f'{self.customer}'
 
-    class Meta:
-        verbose_name = 'Арендованно м2'
+#     class Meta:
+#         verbose_name = 'Арендованно м2'
 
 
 class Order(models.Model):
@@ -147,10 +145,8 @@ class Order(models.Model):
         on_delete=CASCADE,
         null=True,
     )
-    space_ordered = models.ForeignKey(
-        Ordered_space,
+    space_ordered = models.PositiveIntegerField(
         verbose_name='Арендованно м2',
-        on_delete=CASCADE,
     )
     price = models.PositiveIntegerField(
         verbose_name='Цена заказа',
