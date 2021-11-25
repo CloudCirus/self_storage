@@ -67,10 +67,11 @@ class Storage(models.Model):
         max_length=256,
     )
     space = models.PositiveIntegerField(
-        verbose_name='Складская площадь'
+        verbose_name='Складская площадь',
     )
     occupied_space = models.PositiveIntegerField(
-        verbose_name='Занято м2'
+        verbose_name='Занято м2',
+        null=True,
     )
 
     def __str__(self):
@@ -86,15 +87,20 @@ class Storage_item(models.Model):
         verbose_name='Складская единица',
         max_length=50,
     )
-    price = models.IntegerField(
-        verbose_name='Цена',
+    price_week = models.IntegerField(
+        verbose_name='Цена нед.',
+    )
+    price_week = models.IntegerField(
+        verbose_name='Цена мес.',
     )
     occupied_space = models.PositiveIntegerField(
-        verbose_name='Занимает м2'
+        verbose_name='Занимает м2',
     )
-
+    amount = models.PositiveIntegerField(
+        verbose_name='Колличество',
+    )
     def __str__(self):
-        return f'{self.title} {self.price} руб'
+        return f'{self.title}'
 
     class Meta:
         verbose_name = 'Складская единица'
