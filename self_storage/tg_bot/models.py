@@ -13,19 +13,21 @@ class Customer(models.Model):
         'Имя покупателя в Телеграме',
         max_length=256,
         blank=True,
-        default=''
+        default='',
     )
     first_name = models.CharField(
         'Имя',
-        max_length=256,
-        blank=True,
-        default=''
+        max_length=50,
+        # blank=True,
+        # default='',
     )
     last_name = models.CharField(
         'Фамилия',
-        max_length=256,
-        blank=True,
-        default=''
+        max_length=50,
+    )
+    midle_name = models.CharField(
+        'Отчество',
+        max_length=50,
     )
     passport_series = models.PositiveIntegerField(
         'Серия паспорта',
@@ -49,7 +51,7 @@ class Customer(models.Model):
 
 class Storages(models.Model):
     title = models.CharField(
-        'короткое название',
+        'Короткое название',
         max_length=50,
     )
     city = models.CharField(
@@ -73,15 +75,14 @@ class Storages(models.Model):
 
 
 class Order(models.Model):
-    order_number = models.PositiveIntegerField(
+    order_id = models.PositiveIntegerField(
         'Номер заказа',
         null=True,
-        default=None,
         unique=True,
     )
     customer = models.ForeignKey(
         Customer,
-        on_delete=CASCADE
+        on_delete=CASCADE,
     )
     storage = models.ForeignKey(
         Storages,
@@ -93,9 +94,10 @@ class Order(models.Model):
     )
     start_at = models.DateTimeField('Начало аренды')
     finished_at = models.DateTimeField('Конец аренды')
+    qr_code = models.ImageField('QR код')
 
     def __str__(self):
-        return f'{self.order_number} / {self.storage.title} / {self.finished_at}'
+        return f'{self.order_id} / {self.storage.title} / {self.finished_at}'
 
     class Meta:
         verbose_name = 'Заказ'
