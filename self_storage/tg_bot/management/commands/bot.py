@@ -106,7 +106,7 @@ def get_storage_conditions(update: Update, context: CallbackContext):
         keyboard = []
         storage_cells = Storage_item.objects.filter(title__contains='sqm')
         for cell in storage_cells:
-            keyboard.append(f'{cell.title}/{cell.price_month} руб.')
+            keyboard.append(f'{cell.title} {cell.price_month} руб.')
         other_things_keyboard = split(keyboard, 5)
         update.message.reply_text(
             'Здесь будут условия хранения. Кстати где их взять?\n',
@@ -117,10 +117,18 @@ def get_storage_conditions(update: Update, context: CallbackContext):
 
 def get_storage_period(update, context):
     user_input = update.effective_message.text
+    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+    active_order.price = int(user_input.split()[1])
+    active_order.save()
+
+    keyboard = [
+        '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
+    ]
+    storage_period_keyboard = split(keyboard, 4)
 
     update.message.reply_text(
-        'Бронируем?\n',
-        reply_markup=ReplyKeyboardMarkup([['Бронировать']], resize_keyboard=True, one_time_keyboard=True)
+        'Выберите, пожалуйста, период хранения (мес.)\n',
+        reply_markup=ReplyKeyboardMarkup(storage_period_keyboard, resize_keyboard=True, one_time_keyboard=True)
     )
     return PD
 

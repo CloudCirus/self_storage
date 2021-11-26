@@ -177,6 +177,11 @@ class Order(models.Model):
         null=True,
     )
 
+    is_active = models.BooleanField(
+        verbose_name='Заказ в процессе создания',
+        default=True
+    )
+
     def __str__(self):
         return f'{self.order_id} / {self.storage.title} / {self.finished_at}'
 
