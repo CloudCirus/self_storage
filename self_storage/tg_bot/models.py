@@ -31,12 +31,15 @@ class Customer(models.Model):
     )
     passport_series = models.PositiveIntegerField(
         verbose_name='Серия паспорта',
+        default=1,
     )
     passport_number = models.PositiveIntegerField(
         verbose_name='Номер паспорта',
+        default=1,
     )
     phone_number = PhoneNumberField(
         verbose_name='Номер телефона',
+        default='',
     )
 
     GDPR_status = models.BooleanField(
@@ -75,7 +78,7 @@ class Storage(models.Model):
     )
 
     def __str__(self):
-        return f'{self.address} {self.occupied_space}/{self.space} м2'
+        return f'{self.address}'
 
     class Meta:
         verbose_name = 'Склад'
@@ -89,9 +92,11 @@ class Storage_item(models.Model):
     )
     price_week = models.IntegerField(
         verbose_name='Цена нед.',
+        default=False
     )
-    price_week = models.IntegerField(
+    price_month = models.IntegerField(
         verbose_name='Цена мес.',
+        default=False
     )
     occupied_space = models.PositiveIntegerField(
         verbose_name='Занимает м2',
@@ -153,18 +158,23 @@ class Order(models.Model):
     )
     space_ordered = models.PositiveIntegerField(
         verbose_name='Арендованно м2',
+        null=True,
     )
     price = models.PositiveIntegerField(
         verbose_name='Цена заказа',
+        null=True,
     )
     start_at = models.DateTimeField(
         verbose_name='Начало аренды',
+        null=True,
     )
     finished_at = models.DateTimeField(
         verbose_name='Конец аренды',
+        null=True,
     )
     qr_code = models.ImageField(
         verbose_name='QR код',
+        null=True,
     )
 
     def __str__(self):

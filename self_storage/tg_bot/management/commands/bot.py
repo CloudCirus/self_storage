@@ -1,3 +1,5 @@
+import time
+
 from environs import Env
 
 from django.core.management.base import BaseCommand
@@ -15,6 +17,8 @@ from telegram.ext import (
     CallbackContext,
 )
 
+from tg_bot.models import Storage, Customer, Storage_item, Order
+
 env = Env()
 env.read_env()
 
@@ -30,25 +34,35 @@ logger = logging.getLogger(__name__)
 (
     MAIN,  # склады
     CHOOSE_THINGS,  # что будем хранить “сезонные вещи” и “другое” def choose_things
-    TYPE_THING,  # выбираем, что будем хранить
+    STORAGE_COND,  # выбираем, что будем хранить
+    OTHER_ITEMS,  # стоимость хранения в неделю/месяц other
     STORAGE_PERIOD,  # период хранения storage_period
     SEASONAL_ITEMS,  # skis/snowboard/bicycle/wheels seasonal_items
-    OTHER,  # стоимость хранения в неделю/месяц other
     PD,  # добавляем ПД в БД, def add_pd
     ADD_PERSONAL_INFO,  # добавляем ПД в БД, def add_pd
     PAYMENT,  # добавляем ПД в БД, def add_pd get_payment
 
 ) = range(9)
 
-prices = {}
-customers = {}
+
+def split(arr, size):
+    arrs = []
+    while len(arr) > size:
+        pice = arr[:size]
+        arrs.append(pice)
+        arr = arr[size:]
+    arrs.append(arr)
+    return arrs
 
 
 # БОТ - начало
 def start(update: Update, context: CallbackContext) -> int:
     user = update.effective_user
-    keyboard = [['Начнем с выбора склада']]
-    customers[update.message.chat_id] = {}
+    keyboard = []
+    warehouses = Storage.objects.all()
+    for warehouse in warehouses:
+        keyboard.append([warehouse.address])
+
     update.message.reply_text(
         f'Привет, {user.first_name}!\n'
         'Я помогу вам арендовать личную ячейку для хранения вещей.\n'
@@ -56,55 +70,62 @@ def start(update: Update, context: CallbackContext) -> int:
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     )
 
-    return MAIN
-
-
-def get_warehouses(update, context):
-    user_input = update.effective_message.text
-    if user_input == 'Начнем с выбора склада':
-        warehouses = [['склад 1'], ['склад 2'], ['склад 3'], ['склад 4']]
-        warehouses_keyboard = warehouses
-        update.message.reply_text(
-            'Выберите ближайший склад.\n',
-            reply_markup=ReplyKeyboardMarkup(warehouses_keyboard, resize_keyboard=True, one_time_keyboard=True)
-        )
     return CHOOSE_THINGS
 
 
-def choose_things(update, context):
-    user_input = update.effective_message.text
-    customers[update.message.chat_id]['store'] = user_input
-    print(customers)
+def get_warehouses(update, context):
+    pass
+
+
+def choose_things(update: Update, context: CallbackContext):
+    user = update.effective_user
+
+    customer, _ = Customer.objects.get_or_create(external_id=update.message.chat_id)
+    customer.first_name = user.first_name
+    customer.last_name = user.last_name or '-'
+    customer.save()
+    Order.objects.create(
+        order_id=update.message.chat_id + int(time.time()),
+        storage=Storage.objects.get(address=update.effective_message.text),
+        customer=customer,
+    )
+
     keyboard = [['Сезонное'], ['Другое']]
     update.message.reply_text(
         'Что хотите хранить?\n',
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     )
-    return TYPE_THING
+    return STORAGE_COND
 
 
-def get_type_of_thing(update, context):
+def get_storage_conditions(update: Update, context: CallbackContext):
     user_input = update.effective_message.text
     if user_input == 'Сезонное':
         return SEASONAL_ITEMS
     if user_input == 'Другое':
-        return OTHER
+        keyboard = []
+        storage_cells = Storage_item.objects.filter(title__contains='sqm')
+        for cell in storage_cells:
+            keyboard.append(f'{cell.title}/{cell.price_month} руб.')
+        other_things_keyboard = split(keyboard, 5)
+        update.message.reply_text(
+            'Здесь будут условия хранения. Кстати где их взять?\n',
+            reply_markup=ReplyKeyboardMarkup(other_things_keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
+        return STORAGE_PERIOD
 
 
 def get_storage_period(update, context):
-    pass
+    user_input = update.effective_message.text
+
     update.message.reply_text(
         'Бронируем?\n',
-        reply_markup=ReplyKeyboardMarkup(['Бронировать'], resize_keyboard=True, one_time_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([['Бронировать']], resize_keyboard=True, one_time_keyboard=True)
     )
     return PD
 
 
 def get_seasonal_items():
-    return STORAGE_PERIOD
-
-
-def get_other_items():
     return STORAGE_PERIOD
 
 
@@ -157,10 +178,9 @@ class Command(BaseCommand):
                 PD: [MessageHandler(Filters.text & ~Filters.command, add_pd)],
                 CHOOSE_THINGS: [MessageHandler(Filters.text & ~Filters.command, choose_things)],
                 ADD_PERSONAL_INFO: [MessageHandler(Filters.text & ~Filters.command, add_personal_info)],
-                TYPE_THING: [MessageHandler(Filters.text & ~Filters.command, get_type_of_thing)],
+                STORAGE_COND: [MessageHandler(Filters.text & ~Filters.command, get_storage_conditions)],
                 STORAGE_PERIOD: [MessageHandler(Filters.text & ~Filters.command, get_storage_period)],
                 SEASONAL_ITEMS: [MessageHandler(Filters.text & ~Filters.command, get_seasonal_items)],
-                OTHER: [MessageHandler(Filters.text & ~Filters.command, get_other_items)],
                 PAYMENT: [MessageHandler(Filters.text & ~Filters.command, get_payment)],
 
             },
