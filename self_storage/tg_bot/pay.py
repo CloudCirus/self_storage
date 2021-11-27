@@ -1,13 +1,11 @@
 import requests
 import json
+from environs import Env
 
 
-
-def send_invoice(chat_id):
+def send_invoice(chat_id, token, provider_token):
     method="sendInvoice"
-    token = "token"
     url = f"https://api.telegram.org/bot{token}/{method}"
-    chat_id = "@space_as_it_is"
     prices = json.dumps([{
         "label": "руб",
         "amount": 10000
@@ -17,11 +15,20 @@ def send_invoice(chat_id):
         "title": "YourTitle",
         "description": "YourDescription",
         "payload": "YourPayload",
-        "provider_token": "provider_token",
+        "provider_token": provider_token,
         "currency": "RUB",
-        "start parameter": "test",
+        "start parameter": "Услуги аренды",
         "prices": prices
     }
 
     response = requests.post(url, params=params)
     response.raise_for_status()
+
+
+if __name__ == "__main__":
+    env = Env()
+    env.read_env()
+    provider_token = env.str('PROVIDER_TOKEN')
+    token = env.str('TG_TOKEN')
+    chat_id = env.str('BOT_ID')
+    send_invoice(chat_id, token, provider_token)
