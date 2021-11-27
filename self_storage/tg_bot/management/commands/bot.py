@@ -36,13 +36,17 @@ logger = logging.getLogger(__name__)
     CHOOSE_THINGS,  # что будем хранить “сезонные вещи” и “другое” def choose_things
     STORAGE_COND,  # выбираем, что будем хранить
     OTHER_ITEMS,  # стоимость хранения в неделю/месяц other
-    STORAGE_PERIOD,  # период хранения storage_period
-    SEASONAL_ITEMS,  # skis/snowboard/bicycle/wheels seasonal_items
+    STORAGE_PERIOD_OTHER,  # период хранения storage_period
+    CHOOSE_SEASON_ITEMS,  # выбираем кол-во сезонных вещей
+    STORAGE_PERIOD_SEASON,  # период хранения storage_period
+    COUNTING_BOOKING_SEASON,  # период хранения storage_period
+    COUNTING_BOOKING_OTHER,  # период хранения storage_period
+    BOOKING,  # записываем цену, кнопка "Бронировать"
     PD,  # добавляем ПД в БД, def add_pd
     ADD_PERSONAL_INFO,  # добавляем ПД в БД, def add_pd
     PAYMENT,  # добавляем ПД в БД, def add_pd get_payment
 
-) = range(9)
+) = range(13)
 
 
 def split(arr, size):
@@ -55,7 +59,6 @@ def split(arr, size):
     return arrs
 
 
-# БОТ - начало
 def start(update: Update, context: CallbackContext) -> int:
     user = update.effective_user
     keyboard = []
@@ -71,10 +74,6 @@ def start(update: Update, context: CallbackContext) -> int:
     )
 
     return CHOOSE_THINGS
-
-
-def get_warehouses(update, context):
-    pass
 
 
 def choose_things(update: Update, context: CallbackContext):
@@ -101,7 +100,14 @@ def choose_things(update: Update, context: CallbackContext):
 def get_storage_conditions(update: Update, context: CallbackContext):
     user_input = update.effective_message.text
     if user_input == 'Сезонное':
-        return SEASONAL_ITEMS
+        keyboard = [['лыжи'], ['сноуборд'], ['велосипед'], ['колеса']]
+        update.message.reply_text(
+            'Здесь будут условия хранения сезонных вещей.\n',
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
+
+        return CHOOSE_SEASON_ITEMS
+
     if user_input == 'Другое':
         keyboard = []
         storage_cells = Storage_item.objects.filter(title__contains='sqm')
@@ -109,13 +115,14 @@ def get_storage_conditions(update: Update, context: CallbackContext):
             keyboard.append(f'{cell.title} {cell.price_month} руб.')
         other_things_keyboard = split(keyboard, 5)
         update.message.reply_text(
-            'Здесь будут условия хранения. Кстати где их взять?\n',
+            'Здесь будут условия хранения других вещей.\n',
             reply_markup=ReplyKeyboardMarkup(other_things_keyboard, resize_keyboard=True, one_time_keyboard=True)
         )
-        return STORAGE_PERIOD
+
+        return STORAGE_PERIOD_OTHER
 
 
-def get_storage_period(update, context):
+def get_storage_period_other(update, context):
     user_input = update.effective_message.text
     active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
     active_order.price = int(user_input.split()[1])
@@ -130,16 +137,88 @@ def get_storage_period(update, context):
         'Выберите, пожалуйста, период хранения (мес.)\n',
         reply_markup=ReplyKeyboardMarkup(storage_period_keyboard, resize_keyboard=True, one_time_keyboard=True)
     )
-    return PD
+    return BOOKING
 
 
-def get_seasonal_items():
-    return STORAGE_PERIOD
+def choose_season_items(update, context):
+    user_input = update.effective_message.text
+    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+    active_order.item = Storage_item.objects.get(title=user_input)
+    active_order.save()
+    update.message.reply_text(
+        'Введите, пожалуйста, количество вещей'
+    )
+
+    return STORAGE_PERIOD_SEASON
 
 
-def add_pd():
+def get_storage_period_season(update, context):
+    user_input = update.effective_message.text
+    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+    active_order.quantity = int(user_input)
+    active_order.save()
+
+    keyboard = [[f'неделя {active_order.item.price_week} р.'], [f'месяц {active_order.item.price_month} р.']]
+
+    if active_order.item.title == 'колеса':
+        keyboard = [[f'месяц {active_order.item.price_month} р.']]
+
+    update.message.reply_text(
+        'Пожалуйста, выберите удобный вариант хранения\n',
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    )
+
+    return COUNTING_BOOKING_SEASON
+
+
+def counting_booking_other(update, context):
     pass
+
+
+def counting_season(update, context):
+    user_input = update.effective_message.text
+    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+    period, price, _ = user_input.split()
+    active_order.price = int(price) * active_order.quantity
+    active_order.save()
+
+    keyboard = [
+        '1', '2', '3', '4', '5', '6'
+    ]
+    if period == 'неделя':
+        keyboard = [
+            '1', '2', '3', '4', '5', '6',
+            '7', '8', '9', '10', '11', '12',
+            '13', '14', '15', '16', '17', '18',
+            '19', '20', '21', '22', '23', '24'
+        ]
+
+    counting_season_keyboard = split(keyboard, 6)
+
+    update.message.reply_text(
+        f'Укажите, пожалуйста, кол-во ({period})\n',
+        reply_markup=ReplyKeyboardMarkup(counting_season_keyboard, resize_keyboard=True, one_time_keyboard=True)
+    )
+
+    return BOOKING
+
+
+def booking(update, context):
+    user_input = update.effective_message.text
+    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+    active_order.price = active_order.price * int(user_input)
+    active_order.save()
+
+    update.message.reply_text(
+        f'Пожалуйста, подтвердите заказ',
+        reply_markup=ReplyKeyboardMarkup(['Брорнировать'], resize_keyboard=True, one_time_keyboard=True)
+    )
+
     return PD
+
+
+def add_pd(update, context):
+    pass
 
 
 def add_personal_info():
@@ -151,7 +230,6 @@ def get_payment():
     pass
 
 
-# БОТ - нераспознанная команда
 def unknown(update, context):
     reply_keyboard = [['ГЛАВНОЕ МЕНЮ']]
     update.message.reply_text(
@@ -172,23 +250,24 @@ class Command(BaseCommand):
     help = 'Телеграм-бот'
 
     def handle(self, *args, **options):
-        # Create the Updater and pass it your bot's token.
         updater = Updater(telegram_token)
 
-        # Get the dispatcher to register handlers
         dispatcher = updater.dispatcher
 
-        # Add conversation handler with the states CHOICE, TITLE, PHOTO, CONTACT, LOCATION
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('start', start)],
             states={
-                MAIN: [MessageHandler(Filters.text & ~Filters.command, get_warehouses)],
+
                 PD: [MessageHandler(Filters.text & ~Filters.command, add_pd)],
                 CHOOSE_THINGS: [MessageHandler(Filters.text & ~Filters.command, choose_things)],
                 ADD_PERSONAL_INFO: [MessageHandler(Filters.text & ~Filters.command, add_personal_info)],
                 STORAGE_COND: [MessageHandler(Filters.text & ~Filters.command, get_storage_conditions)],
-                STORAGE_PERIOD: [MessageHandler(Filters.text & ~Filters.command, get_storage_period)],
-                SEASONAL_ITEMS: [MessageHandler(Filters.text & ~Filters.command, get_seasonal_items)],
+                STORAGE_PERIOD_OTHER: [MessageHandler(Filters.text & ~Filters.command, get_storage_period_other)],
+                CHOOSE_SEASON_ITEMS: [MessageHandler(Filters.text & ~Filters.command, choose_season_items)],
+                STORAGE_PERIOD_SEASON: [MessageHandler(Filters.text & ~Filters.command, get_storage_period_season)],
+                COUNTING_BOOKING_SEASON: [MessageHandler(Filters.text & ~Filters.command, counting_season)],
+                COUNTING_BOOKING_OTHER: [MessageHandler(Filters.text & ~Filters.command, counting_booking_other)],
+                BOOKING: [MessageHandler(Filters.text & ~Filters.command, booking)],
                 PAYMENT: [MessageHandler(Filters.text & ~Filters.command, get_payment)],
 
             },
@@ -199,12 +278,8 @@ class Command(BaseCommand):
         dispatcher.add_handler(conv_handler)
         dispatcher.add_error_handler(error)
 
-        # Start the Bot
         updater.start_polling()
 
-        # Run the bot until you press Ctrl-C or the process receives SIGINT,
-        # SIGTERM or SIGABRT. This should be used most of the time, since
-        # start_polling() is non-blocking and will stop the bot gracefully.
         updater.idle()
 
 # def main() -> None:

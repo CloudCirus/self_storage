@@ -156,12 +156,22 @@ class Order(models.Model):
         on_delete=CASCADE,
         null=True,
     )
+    item = models.ForeignKey(
+        Storage_item,
+        verbose_name='Вещи в заказе',
+        on_delete=CASCADE,
+        null=True,
+    )
     space_ordered = models.PositiveIntegerField(
         verbose_name='Арендованно м2',
         null=True,
     )
     price = models.PositiveIntegerField(
         verbose_name='Цена заказа',
+        null=True,
+    )
+    quantity = models.PositiveIntegerField(
+        verbose_name='Количество сезонных вещей',
         null=True,
     )
     start_at = models.DateTimeField(
