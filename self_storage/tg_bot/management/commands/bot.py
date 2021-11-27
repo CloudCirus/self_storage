@@ -43,10 +43,11 @@ logger = logging.getLogger(__name__)
     COUNTING_BOOKING_OTHER,  # период хранения storage_period
     BOOKING,  # записываем цену, кнопка "Бронировать"
     PD,  # добавляем ПД в БД, def add_pd
-    ADD_PERSONAL_INFO,  # добавляем ПД в БД, def add_pd
+    IS_PD,  # добавляем ПД в БД, def add_pd
+    CONTACT,  # добавляем ПД в БД, def add_pd
     PAYMENT,  # добавляем ПД в БД, def add_pd get_payment
 
-) = range(13)
+) = range(14)
 
 
 def split(arr, size):
@@ -214,11 +215,53 @@ def booking(update, context):
         reply_markup=ReplyKeyboardMarkup(['Брорнировать'], resize_keyboard=True, one_time_keyboard=True)
     )
 
-    return PD
+    return IS_PD
+
+
+def is_pd(update, context):
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    if not customer.GDPR_status:
+        with open("pd.pdf", 'rb') as file:
+            context.bot.send_document(chat_id=update.message.chat_id, document=file)
+        reply_keyboard = [['Принять', 'Отказаться']]
+        update.message.reply_text(
+            text='Прошу ознакомиться с положением об обработке персональных данных.',
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, one_time_keyboard=True, resize_keyboard=True
+            ),
+        )
+        return PD
+
+    return CONTACT
 
 
 def add_pd(update, context):
-    pass
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    answer = update.message.text
+
+    if answer == 'Принять':
+        customer.GDPR_status = True
+
+        update.message.reply_text(
+            f'Добавлено согласие на обработку данных.',
+        )
+        logger.info(f'Пользователю {customer.external_id}'
+                    f'Добавлено согласие на обработку данных: {customer.GDPR_status}')
+        customer.save()
+
+        return CONTACT
+
+    elif answer == 'Отказаться':
+        with open("pd.pdf", 'rb') as file:
+            context.bot.send_document(chat_id=update.message.chat_id, document=file)
+        reply_keyboard = [['Принять', 'Отказаться']]
+        update.message.reply_text(
+            text='Извините, без согласия на обработку данных заказы невозможны.',
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, one_time_keyboard=True, resize_keyboard=True
+            ),
+        )
+        return PD
 
 
 def add_personal_info():
@@ -259,8 +302,9 @@ class Command(BaseCommand):
             states={
 
                 PD: [MessageHandler(Filters.text & ~Filters.command, add_pd)],
+                IS_PD: [MessageHandler(Filters.text & ~Filters.command, is_pd)],
                 CHOOSE_THINGS: [MessageHandler(Filters.text & ~Filters.command, choose_things)],
-                ADD_PERSONAL_INFO: [MessageHandler(Filters.text & ~Filters.command, add_personal_info)],
+                CONTACT: [MessageHandler(Filters.text & ~Filters.command, add_personal_info)],
                 STORAGE_COND: [MessageHandler(Filters.text & ~Filters.command, get_storage_conditions)],
                 STORAGE_PERIOD_OTHER: [MessageHandler(Filters.text & ~Filters.command, get_storage_period_other)],
                 CHOOSE_SEASON_ITEMS: [MessageHandler(Filters.text & ~Filters.command, choose_season_items)],
