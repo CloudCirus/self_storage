@@ -44,10 +44,12 @@ logger = logging.getLogger(__name__)
     BOOKING,  # записываем цену, кнопка "Бронировать"
     PD,  # добавляем ПД в БД, def add_pd
     IS_PD,  # добавляем ПД в БД, def add_pd
-    CONTACT,  # добавляем ПД в БД, def add_pd
+    CONTACT_PHONE,  # добавляем телефон
+    CONTACT_NAME,  # добавляем ФИ
+    CONTACT_PASS,  # добавляем номер паспорта
     PAYMENT,  # добавляем ПД в БД, def add_pd get_payment
 
-) = range(14)
+) = range(16)
 
 
 def split(arr, size):
@@ -212,7 +214,7 @@ def booking(update, context):
 
     update.message.reply_text(
         f'Пожалуйста, подтвердите заказ',
-        reply_markup=ReplyKeyboardMarkup(['Брорнировать'], resize_keyboard=True, one_time_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([['Брорнировать']], resize_keyboard=True, one_time_keyboard=True)
     )
 
     return IS_PD
@@ -220,6 +222,7 @@ def booking(update, context):
 
 def is_pd(update, context):
     customer = Customer.objects.get(external_id=update.message.chat_id)
+
     if not customer.GDPR_status:
         with open("pd.pdf", 'rb') as file:
             context.bot.send_document(chat_id=update.message.chat_id, document=file)
@@ -232,7 +235,16 @@ def is_pd(update, context):
         )
         return PD
 
-    return CONTACT
+    update.message.reply_text(
+        text='Переходим к заполнению персональных данных. Укажите, пожалуйста, свой номер телефона',
+        reply_markup=ReplyKeyboardMarkup(
+            [['Отправить мой номер'], ['Ввести номер вручную']],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return CONTACT_PHONE
 
 
 def add_pd(update, context):
@@ -249,7 +261,16 @@ def add_pd(update, context):
                     f'Добавлено согласие на обработку данных: {customer.GDPR_status}')
         customer.save()
 
-        return CONTACT
+        update.message.reply_text(
+            text='Переходим к заполнению персональных данных. Укажите, пожалуйста, свой номер телефона',
+            reply_markup=ReplyKeyboardMarkup(
+                [['Отправить мой номер'], ['Ввести номер вручную']],
+                one_time_keyboard=True,
+                resize_keyboard=True,
+            ),
+        )
+
+        return CONTACT_PHONE
 
     elif answer == 'Отказаться':
         with open("pd.pdf", 'rb') as file:
@@ -261,16 +282,51 @@ def add_pd(update, context):
                 reply_keyboard, one_time_keyboard=True, resize_keyboard=True
             ),
         )
+
         return PD
 
 
-def add_personal_info():
-    pass
+def add_personal_info_phone(update, context):
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    answer = update.message.text
+    if answer == 'Ввести номер вручную':
+        update.message.reply_text(
+            f'Введите номер телефона в формате +7 (код) номер',
+        )
+
+    return CONTACT_NAME
+
+
+def add_personal_info_name(update, context):
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    customer.phone_number = update.message.text
+    customer.save()
+    update.message.reply_text(
+        f'В Телеграм вас зовут {customer.first_name} {customer.last_name}.\n'
+        f'Если желаете переименоваться, введите пожалуйста Фамилию Имя.',
+    )
+
+    return CONTACT_PASS
+
+
+def add_personal_info_pass(update, context):
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    customer.first_name, customer.last_name = update.message.text.split()
+    customer.save()
+    update.message.reply_text(
+        f'Введите, пожалуйста, номер паспорта в формате серия номер.\n'
+    )
+
     return PAYMENT
 
 
-def get_payment():
-    pass
+def get_payment(update, context):
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    customer.passport_series, customer.passport_number = update.message.text.split()
+    customer.save()
+    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+    active_order.is_active = False
+    active_order.save()
 
 
 def unknown(update, context):
@@ -304,7 +360,9 @@ class Command(BaseCommand):
                 PD: [MessageHandler(Filters.text & ~Filters.command, add_pd)],
                 IS_PD: [MessageHandler(Filters.text & ~Filters.command, is_pd)],
                 CHOOSE_THINGS: [MessageHandler(Filters.text & ~Filters.command, choose_things)],
-                CONTACT: [MessageHandler(Filters.text & ~Filters.command, add_personal_info)],
+                CONTACT_PHONE: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_phone)],
+                CONTACT_NAME: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_name)],
+                CONTACT_PASS: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_pass)],
                 STORAGE_COND: [MessageHandler(Filters.text & ~Filters.command, get_storage_conditions)],
                 STORAGE_PERIOD_OTHER: [MessageHandler(Filters.text & ~Filters.command, get_storage_period_other)],
                 CHOOSE_SEASON_ITEMS: [MessageHandler(Filters.text & ~Filters.command, choose_season_items)],
