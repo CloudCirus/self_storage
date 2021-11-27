@@ -12,12 +12,12 @@ def send_invoice(chat_id, token, provider_token):
     }])
     params = {
         "chat_id": chat_id,
-        "title": "YourTitle",
-        "description": "YourDescription",
+        "title": "SELF STORAGE",
+        "description": "Услуги аренды",
         "payload": "YourPayload",
         "provider_token": provider_token,
         "currency": "RUB",
-        "start parameter": "Услуги аренды",
+        "start parameter": "test",
         "prices": prices
     }
 
