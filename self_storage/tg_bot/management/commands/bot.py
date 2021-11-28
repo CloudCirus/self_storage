@@ -1,3 +1,4 @@
+import re
 import time
 
 from environs import Env
@@ -32,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 (
-    MAIN,  # склады
+    MAIN,  # start
     CHOOSE_THINGS,  # что будем хранить “сезонные вещи” и “другое” def choose_things
     STORAGE_COND,  # выбираем, что будем хранить
     OTHER_ITEMS,  # стоимость хранения в неделю/месяц other
@@ -45,11 +46,16 @@ logger = logging.getLogger(__name__)
     PD,  # добавляем ПД в БД, def add_pd
     IS_PD,  # добавляем ПД в БД, def add_pd
     CONTACT_PHONE,  # добавляем телефон
+    VALIDATE_PHONE,  # проверяем телефон
     CONTACT_NAME,  # добавляем ФИ
+    VALIDATE_NAME,  # проверяем ФИ
+    CONTACT_NAME_EDIT,  # ввод ФИ вручную
     CONTACT_PASS,  # добавляем номер паспорта
+    VALIDATE_PASS,  # добавляем номер паспорта
+    BORN_DATE,  # добавляем номер паспорта
     PAYMENT,  # добавляем ПД в БД, def add_pd get_payment
 
-) = range(16)
+) = range(21)
 
 
 def split(arr, size):
@@ -68,15 +74,29 @@ def start(update: Update, context: CallbackContext) -> int:
     warehouses = Storage.objects.all()
     for warehouse in warehouses:
         keyboard.append([warehouse.address])
+    try:
+        active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+        if active_order:
+            active_order.delete()
+        update.message.reply_text(
+            f'Привет, {user.first_name}!\n'
+            'Я помогу вам арендовать личную ячейку для хранения вещей.\n'
+            'Давайте посмотрим адреса складов, чтобы выбрать ближайший!',
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
 
-    update.message.reply_text(
-        f'Привет, {user.first_name}!\n'
-        'Я помогу вам арендовать личную ячейку для хранения вещей.\n'
-        'Давайте посмотрим адреса складов, чтобы выбрать ближайший!',
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    )
+        return CHOOSE_THINGS
 
-    return CHOOSE_THINGS
+    except Order.DoesNotExist:
+
+        update.message.reply_text(
+            f'Привет, {user.first_name}!\n'
+            'Я помогу вам арендовать личную ячейку для хранения вещей.\n'
+            'Давайте посмотрим адреса складов, чтобы выбрать ближайший!',
+            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        )
+
+        return CHOOSE_THINGS
 
 
 def choose_things(update: Update, context: CallbackContext):
@@ -214,14 +234,14 @@ def booking(update, context):
 
     update.message.reply_text(
         f'Пожалуйста, подтвердите заказ',
-        reply_markup=ReplyKeyboardMarkup([['Брорнировать']], resize_keyboard=True, one_time_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([['Бронировать']], resize_keyboard=True, one_time_keyboard=True)
     )
 
     return IS_PD
 
 
 def is_pd(update, context):
-    customer = Customer.objects.get(external_id=update.message.chat_id)
+    customer = get_customer(update)
 
     if not customer.GDPR_status:
         with open("pd.pdf", 'rb') as file:
@@ -248,7 +268,7 @@ def is_pd(update, context):
 
 
 def add_pd(update, context):
-    customer = Customer.objects.get(external_id=update.message.chat_id)
+    customer = get_customer(update)
     answer = update.message.text
 
     if answer == 'Принять':
@@ -287,46 +307,175 @@ def add_pd(update, context):
 
 
 def add_personal_info_phone(update, context):
-    customer = Customer.objects.get(external_id=update.message.chat_id)
+    customer = get_customer(update)
     answer = update.message.text
     if answer == 'Ввести номер вручную':
         update.message.reply_text(
-            f'Введите номер телефона в формате +7 (код) номер',
+            f'Введите номер телефона',
         )
 
-    return CONTACT_NAME
+    return VALIDATE_PHONE
 
 
-def add_personal_info_name(update, context):
-    customer = Customer.objects.get(external_id=update.message.chat_id)
+def validate_phone(update, context):
+    rule = r'(\+7|8|7).*?(\d{3}).*?(\d{3}).*?(\d{2}).*?(\d{2})'
+    answer = update.message.text
+    if not re.search(rule, answer):
+        update.message.reply_text(
+            f'Введен некорректный номер телефона',
+            reply_markup=ReplyKeyboardMarkup(
+                [['Отправить мой номер'], ['Ввести номер вручную']], one_time_keyboard=True, resize_keyboard=True)
+        )
+
+        return CONTACT_PHONE
+
+    customer = get_customer(update)
     customer.phone_number = update.message.text
     customer.save()
     update.message.reply_text(
-        f'В Телеграм вас зовут {customer.first_name} {customer.last_name}.\n'
-        f'Если желаете переименоваться, введите пожалуйста Фамилию Имя.',
+        f'В Телеграм вас зовут {customer.first_name} {customer.last_name}.\n',
+        reply_markup=ReplyKeyboardMarkup(
+            [['Переименоваться'], ['Ничего не менять']], one_time_keyboard=True, resize_keyboard=True)
     )
 
-    return CONTACT_PASS
+    return CONTACT_NAME_EDIT
 
 
-def add_personal_info_pass(update, context):
-    customer = Customer.objects.get(external_id=update.message.chat_id)
+def add_personal_info_name(update, context):
+    customer = get_customer(update)
+    customer.phone_number = update.message.text
+    customer.save()
+    update.message.reply_text(
+        f'У нас указано, что Вас зовут {customer.first_name} {customer.last_name}.\n',
+        reply_markup=ReplyKeyboardMarkup(
+            [['Переименоваться'], ['Ничего не менять']], one_time_keyboard=True, resize_keyboard=True)
+    )
+
+    return CONTACT_NAME_EDIT
+
+
+def validate_name(update, context):
+    answer = update.message.text
+
+    if not (answer.replace(" ", "")).isalpha() or len(answer.split()) != 2:
+        update.message.reply_text(
+            f'Введенные данные некорректны. \n'
+            f'Пожалуйста, проверьте: вы написали два слова (Фамилия и Имя - в них нет цифр и спецсимволов',
+            reply_markup=ReplyKeyboardMarkup(
+                [['Переименоваться'], ['Ничего не менять']], one_time_keyboard=True, resize_keyboard=True)
+        )
+        return CONTACT_NAME_EDIT
+
+    customer = get_customer(update)
     customer.first_name, customer.last_name = update.message.text.split()
     customer.save()
     update.message.reply_text(
         f'Введите, пожалуйста, номер паспорта в формате серия номер.\n'
     )
 
-    return PAYMENT
+    return VALIDATE_PASS
+
+
+def validate_pass(update, context):
+    answer = update.message.text
+
+    if len(answer.split()) == 2:
+        serial, number = answer.split()
+        if (answer.replace(" ", "")).isdigit():
+            if len(serial) == 4 and len(number) == 6:
+                customer = get_customer(update)
+                customer.passport_series, customer.passport_number = serial, number
+                customer.save()
+                active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
+                active_order.is_active = False
+                active_order.save()
+
+                update.message.reply_text(
+                    f'Данные паспорта сохранены. Введите пожалуйста дату рождения в формате dd.mm.yyyy\n'
+                    f'На текущий момент Вы должны быть старше 14 либо младше 100 лет.',
+                )
+
+                return BORN_DATE
+
+    update.message.reply_text(
+        f'Введенные данные некорректны. \n'
+        f'Пожалуйста, проверьте: вы написали только цифры - 4 (серия паспорта) \n'
+        f' через пробел 6 (номер паспорта). Введите номер паспорта в формате: серия и номер через пробел.',
+    )
+
+    return VALIDATE_PASS
+
+
+def get_birthday(update, context):
+    rule = r'(^(0[1-9]|[12][0-9]|3[01])[- \/.,_](0[1-9]|1[012])[- \/.,_](19|20)\d\d)'
+    answer = update.message.text
+    if not re.search(rule, answer):
+        update.message.reply_text(
+            f'Введенная дата некорректна. Введите пожалуйста дату рождения в формате dd.mm.yyyy\n'
+            f'На текущий момент Вы должны быть старше 14 либо младше 100 лет.',
+        )
+        return BORN_DATE
+
+    if ',' in answer:
+        answer = answer.replace(',', '.')
+    birthday = datetime.strptime(answer, "%d.%m.%Y")
+    now = datetime.now()
+
+    if 14 < (now.year - birthday.year) < 100:
+        update.message.reply_text(
+            f'Дата рождения сохранена. Переходим к оплате.',
+            reply_markup=ReplyKeyboardMarkup(
+                [['Оплатить заказ']], one_time_keyboard=True, resize_keyboard=True)
+        )
+
+        customer = get_customer(update)
+        customer.birthday = birthday
+        customer.save()
+
+        return PAYMENT
+
+    update.message.reply_text(
+        f'К сожалению мы не можем предоставлять Вам услуги в связи с возрастными ограничениями. Приносим свои извинения.',
+    )
+    return BORN_DATE
+
+
+def get_customer(update):
+    customer = Customer.objects.get(external_id=update.message.chat_id)
+    return customer
+
+
+def add_personal_info_name_edit(update, context):
+    customer = get_customer(update)
+    answer = update.message.text
+    if answer == 'Переименоваться':
+        update.message.reply_text(
+            f'Введите, пожалуйста Фамилию и Имя через пробел',
+        )
+        return VALIDATE_NAME
+
+    update.message.reply_text(
+        f'Введите, пожалуйста, номер паспорта в формате: серия и номер через пробел.\n'
+    )
+
+    return VALIDATE_PASS
+
+
+def add_personal_info_pass(update, context):
+    customer = get_customer(update)
+    customer.first_name, customer.last_name = update.message.text.split()
+    customer.save()
+    update.message.reply_text(
+        f'Введите, пожалуйста, номер паспорта в формате серия номер.\n'
+    )
+
+    return VALIDATE_PASS
 
 
 def get_payment(update, context):
-    customer = Customer.objects.get(external_id=update.message.chat_id)
-    customer.passport_series, customer.passport_number = update.message.text.split()
-    customer.save()
-    active_order = Order.objects.get(is_active=True, customer__external_id=update.message.chat_id)
-    active_order.is_active = False
-    active_order.save()
+    answer = update.message.text
+    if answer == 'Оплатить заказ':
+        pass
 
 
 def unknown(update, context):
@@ -356,13 +505,18 @@ class Command(BaseCommand):
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('start', start)],
             states={
-
+                MAIN: [MessageHandler(Filters.text & ~Filters.command, start)],
                 PD: [MessageHandler(Filters.text & ~Filters.command, add_pd)],
                 IS_PD: [MessageHandler(Filters.text & ~Filters.command, is_pd)],
                 CHOOSE_THINGS: [MessageHandler(Filters.text & ~Filters.command, choose_things)],
                 CONTACT_PHONE: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_phone)],
+                VALIDATE_PHONE: [MessageHandler(Filters.text & ~Filters.command, validate_phone)],
                 CONTACT_NAME: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_name)],
+                VALIDATE_NAME: [MessageHandler(Filters.text & ~Filters.command, validate_name)],
+                CONTACT_NAME_EDIT: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_name_edit)],
                 CONTACT_PASS: [MessageHandler(Filters.text & ~Filters.command, add_personal_info_pass)],
+                VALIDATE_PASS: [MessageHandler(Filters.text & ~Filters.command, validate_pass)],
+                BORN_DATE: [MessageHandler(Filters.text & ~Filters.command, get_birthday)],
                 STORAGE_COND: [MessageHandler(Filters.text & ~Filters.command, get_storage_conditions)],
                 STORAGE_PERIOD_OTHER: [MessageHandler(Filters.text & ~Filters.command, get_storage_period_other)],
                 CHOOSE_SEASON_ITEMS: [MessageHandler(Filters.text & ~Filters.command, choose_season_items)],
