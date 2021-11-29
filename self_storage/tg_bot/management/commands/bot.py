@@ -133,7 +133,7 @@ def get_storage_conditions(update: Update, context: CallbackContext):
 
     if user_input == 'Другое':
         keyboard = []
-        storage_cells = Storage_item.objects.filter(title__contains='sqm')
+        storage_cells = Storage_item.objects.filter(title__contains='кв')
         for cell in storage_cells:
             keyboard.append(f'{cell.title} {cell.price_month} руб.')
         other_things_keyboard = split(keyboard, 5)
