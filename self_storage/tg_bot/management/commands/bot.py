@@ -1,7 +1,9 @@
 import re
 import time
+import os
 
 from environs import Env
+import qrcode
 
 from django.core.management.base import BaseCommand
 
@@ -54,8 +56,8 @@ logger = logging.getLogger(__name__)
     VALIDATE_PASS,  # добавляем номер паспорта
     BORN_DATE,  # добавляем номер паспорта
     PAYMENT,  # добавляем ПД в БД, def add_pd get_payment
-
-) = range(21)
+    QR, # формируем QR-код
+) = range(22)
 
 
 def split(arr, size):
@@ -423,16 +425,15 @@ def get_birthday(update, context):
 
     if 14 < (now.year - birthday.year) < 100:
         update.message.reply_text(
-            f'Дата рождения сохранена. Переходим к оплате.',
+            f'Данные для заказа сохранены.',
             reply_markup=ReplyKeyboardMarkup(
-                [['Оплатить заказ']], one_time_keyboard=True, resize_keyboard=True)
+                [['Сгенерировать QR код']], one_time_keyboard=True, resize_keyboard=True)
         )
-
         customer = get_customer(update)
         customer.birthday = birthday
         customer.save()
 
-        return PAYMENT
+        return QR
 
     update.message.reply_text(
         f'К сожалению мы не можем предоставлять Вам услуги в связи с возрастными ограничениями. Приносим свои извинения.',
@@ -470,6 +471,46 @@ def add_personal_info_pass(update, context):
     )
 
     return VALIDATE_PASS
+
+
+def make_qr(data, filename):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=20,
+        border=4
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white")
+    image.save(filename)
+
+    return image
+
+
+def make_QR_code(update, context):
+    customer = get_customer(update)
+    order = Order.objects.get(customer=customer)
+    
+    id = order.order_id
+    storage = order.storage.address
+    period = f'{order.start_at} - {order.finished_at}'
+    
+    qr_data = f'{id} / {storage} / {period}'
+    os.makedirs('tmp', exist_ok=True)
+    path = f'tmp/{id}_qr.png'
+    make_qr(qr_data, path)
+    with open(path, 'rb') as file:
+        order.qr_code = file
+        order.save
+        update.message.reply_text(
+        f'Ваш QR код, сохраните его себе для доступа к хранилищу!',
+        )
+        context.bot.send_document(chat_id=update.message.chat_id, document=file)
+    
+    os.remove(path)
+    
+    return PAYMENT
 
 
 def get_payment(update, context):
@@ -525,6 +566,7 @@ class Command(BaseCommand):
                 COUNTING_BOOKING_OTHER: [MessageHandler(Filters.text & ~Filters.command, counting_booking_other)],
                 BOOKING: [MessageHandler(Filters.text & ~Filters.command, booking)],
                 PAYMENT: [MessageHandler(Filters.text & ~Filters.command, get_payment)],
+                QR: [MessageHandler(Filters.text & ~Filters.command, make_QR_code)],
 
             },
             fallbacks=[MessageHandler(Filters.text & ~Filters.command, unknown)],

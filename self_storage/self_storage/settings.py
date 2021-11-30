@@ -8,8 +8,8 @@ env = Env()
 env.read_env()
 
 secret_key = env.str('SECRET_KEY')
-allowed_hosts = env.list('ALLOWED_HOSTS')
-db_url = env.str('DATABASE_URL')
+# allowed_hosts = env.list('ALLOWED_HOSTS')
+# db_url = env.str('DATABASE_URL')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = secret_key
 
 DEBUG = env.bool('DEBUG', False)
-ALLOWED_HOSTS = allowed_hosts
+ALLOWED_HOSTS = []
 
 # Application definition
 
@@ -72,9 +72,11 @@ WSGI_APPLICATION = 'self_storage.wsgi.application'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
 DATABASES = {
-    'default': dj_database_url.parse(db_url)
-
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
 
 
 # Password validation
